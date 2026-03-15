@@ -40,12 +40,12 @@ export default function ProgressPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">进步曲线</h1>
+      <h1 className="text-2xl font-bold mb-6">Progress</h1>
 
       {/* Filter */}
       <div className="flex gap-2 mb-6">
         {[
-          { value: "all", label: "全部" },
+          { value: "all", label: "All" },
           ...Object.entries(STROKE_LABELS).map(([value, label]) => ({
             value,
             label,
@@ -67,16 +67,16 @@ export default function ProgressPage() {
 
       {filtered.length === 0 ? (
         <div className="p-12 rounded-xl bg-[var(--card)] border border-[var(--border)] text-center text-[var(--muted-foreground)]">
-          <p>暂无分析记录</p>
+          <p>No analyses yet</p>
           <Link href="/analyze" className="text-[var(--primary)] mt-2 inline-block">
-            开始第一次分析 →
+            Start your first analysis →
           </Link>
         </div>
       ) : (
         <div className="space-y-6">
           {/* Score trend */}
           <div className="p-6 rounded-xl bg-[var(--card)] border border-[var(--border)]">
-            <h2 className="font-semibold mb-4">评分趋势</h2>
+            <h2 className="font-semibold mb-4">Score Trend</h2>
             <ProgressChart analyses={filtered} />
           </div>
 
@@ -84,10 +84,10 @@ export default function ProgressPage() {
           {latest && (
             <div className="p-6 rounded-xl bg-[var(--card)] border border-[var(--border)]">
               <h2 className="font-semibold mb-4">
-                维度对比
+                Dimension Comparison
                 {previous && (
                   <span className="text-sm text-[var(--muted-foreground)] font-normal ml-2">
-                    (最新 vs 上次)
+                    (Latest vs Previous)
                   </span>
                 )}
               </h2>
@@ -101,7 +101,7 @@ export default function ProgressPage() {
           {/* History list */}
           <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
             <div className="p-4 border-b border-[var(--border)]">
-              <h2 className="font-semibold">分析历史</h2>
+              <h2 className="font-semibold">Analysis History</h2>
             </div>
             <div className="divide-y divide-[var(--border)]">
               {filtered.map((a) => (
@@ -115,7 +115,7 @@ export default function ProgressPage() {
                       {STROKE_LABELS[a.stroke_type]}
                     </span>
                     <span className="text-xs text-[var(--muted-foreground)] ml-3">
-                      {new Date(a.created_at).toLocaleString("zh-CN")}
+                      {new Date(a.created_at).toLocaleString()}
                     </span>
                   </div>
                   <span

@@ -51,7 +51,7 @@ export default function DashboardPage() {
           className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-lg text-sm hover:opacity-90"
         >
           <Plus className="w-4 h-4" />
-          新分析
+          New Analysis
         </Link>
       </div>
 
@@ -67,7 +67,7 @@ export default function DashboardPage() {
               {s.latestScore !== null ? s.latestScore : "—"}
             </div>
             <div className="text-xs text-[var(--muted-foreground)] mt-1">
-              {s.count} 次分析
+              {s.count} {s.count === 1 ? "analysis" : "analyses"}
             </div>
           </div>
         ))}
@@ -76,16 +76,16 @@ export default function DashboardPage() {
       {/* Recent analyses */}
       <div className="rounded-xl bg-[var(--card)] border border-[var(--border)]">
         <div className="p-4 border-b border-[var(--border)]">
-          <h2 className="font-semibold">最近分析</h2>
+          <h2 className="font-semibold">Recent Analyses</h2>
         </div>
         {recentAnalyses.length === 0 ? (
           <div className="p-8 text-center text-[var(--muted-foreground)]">
-            <p>还没有分析记录</p>
+            <p>No analyses yet</p>
             <Link
               href="/analyze"
               className="text-[var(--primary)] mt-2 inline-block"
             >
-              上传你的第一个视频 →
+              Upload your first video →
             </Link>
           </div>
         ) : (
@@ -113,7 +113,7 @@ export default function DashboardPage() {
                       {STROKE_LABELS[a.stroke_type]}
                     </div>
                     <div className="text-xs text-[var(--muted-foreground)]">
-                      {new Date(a.created_at).toLocaleString("zh-CN")}
+                      {new Date(a.created_at).toLocaleString()}
                     </div>
                   </div>
                 </div>

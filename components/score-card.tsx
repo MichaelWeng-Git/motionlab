@@ -44,7 +44,7 @@ function CircularProgress({ score }: { score: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className={`text-3xl font-bold ${getScoreColor(score)}`}>{score}</span>
-        <span className="text-xs text-[var(--muted-foreground)]">总评分</span>
+        <span className="text-xs text-[var(--muted-foreground)]">Overall</span>
       </div>
     </div>
   );
@@ -53,12 +53,10 @@ function CircularProgress({ score }: { score: number }) {
 export default function ScoreCard({ overallScore, dimensionScores }: Props) {
   return (
     <div className="space-y-6">
-      {/* Overall score */}
       <div className="flex justify-center">
         <CircularProgress score={overallScore} />
       </div>
 
-      {/* Dimension scores */}
       <div className="space-y-3">
         {Object.entries(dimensionScores).map(([key, score]) => (
           <div key={key}>

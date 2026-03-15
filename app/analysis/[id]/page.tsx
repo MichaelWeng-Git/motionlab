@@ -22,8 +22,8 @@ export default function AnalysisPage() {
       try {
         const data = await getAnalysis(params.id as string);
         setAnalysis(data);
-      } catch (err) {
-        setError("无法加载分析结果");
+      } catch {
+        setError("Unable to load analysis results");
       } finally {
         setLoading(false);
       }
@@ -42,9 +42,9 @@ export default function AnalysisPage() {
   if (error || !analysis) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8 text-center">
-        <p className="text-[var(--destructive)]">{error || "分析结果不存在"}</p>
+        <p className="text-[var(--destructive)]">{error || "Analysis not found"}</p>
         <Link href="/dashboard" className="text-[var(--primary)] mt-4 inline-block">
-          返回 Dashboard
+          Back to Dashboard
         </Link>
       </div>
     );
@@ -59,10 +59,10 @@ export default function AnalysisPage() {
         </Link>
         <div>
           <h1 className="text-xl font-bold">
-            {STROKE_LABELS[analysis.stroke_type] || analysis.stroke_type} 分析结果
+            {STROKE_LABELS[analysis.stroke_type] || analysis.stroke_type} Analysis
           </h1>
           <p className="text-sm text-[var(--muted-foreground)]">
-            {new Date(analysis.created_at).toLocaleString("zh-CN")}
+            {new Date(analysis.created_at).toLocaleString()}
           </p>
         </div>
       </div>
@@ -90,14 +90,14 @@ export default function AnalysisPage() {
 
           {/* Radar chart */}
           <div className="p-6 rounded-xl bg-[var(--card)] border border-[var(--border)]">
-            <h3 className="font-semibold mb-3">维度分析</h3>
+            <h3 className="font-semibold mb-3">Dimension Breakdown</h3>
             <RadarChart current={analysis.dimension_scores} />
           </div>
 
           {/* Issues */}
           <div className="p-6 rounded-xl bg-[var(--card)] border border-[var(--border)]">
             <h3 className="font-semibold mb-3">
-              问题与建议 ({analysis.issues.length})
+              Issues & Suggestions ({analysis.issues.length})
             </h3>
             <div className="space-y-3">
               {analysis.issues.map((issue, i) => (
@@ -121,7 +121,7 @@ export default function AnalysisPage() {
                   </div>
                   <p className="text-sm font-medium">{issue.description}</p>
                   <p className="text-xs text-[var(--muted-foreground)] mt-1">
-                    💡 {issue.suggestion}
+                    Tip: {issue.suggestion}
                   </p>
                 </button>
               ))}

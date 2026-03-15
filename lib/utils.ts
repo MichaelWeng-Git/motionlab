@@ -6,17 +6,17 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const STROKE_LABELS: Record<string, string> = {
-  freestyle: "自由泳",
-  breaststroke: "蛙泳",
-  butterfly: "蝶泳",
-  backstroke: "仰泳",
+  freestyle: "Freestyle",
+  breaststroke: "Breaststroke",
+  butterfly: "Butterfly",
+  backstroke: "Backstroke",
 };
 
 export const DIMENSION_LABELS: Record<string, string> = {
-  entry_angle: "入水角度",
-  stroke_power: "划水力量",
-  body_rotation: "身体旋转",
-  kick_rhythm: "踢腿节奏",
-  breathing: "呼吸时机",
-  coordination: "整体协调",
+  entry_angle: "Entry Angle",
+  stroke_power: "Stroke Power",
+  body_rotation: "Body Rotation",
+  kick_rhythm: "Kick Rhythm",
+  breathing: "Breathing",
+  coordination: "Coordination",
 };

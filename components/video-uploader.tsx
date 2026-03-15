@@ -10,12 +10,12 @@ type Props = {
 type Stage = "idle" | "extracting" | "pose" | "analyzing" | "done" | "error";
 
 const STAGE_LABELS: Record<Stage, string> = {
-  idle: "等待上传",
-  extracting: "正在抽取关键帧...",
-  pose: "正在提取骨骼关键点...",
-  analyzing: "AI 正在分析动作...",
-  done: "分析完成!",
-  error: "分析失败",
+  idle: "Waiting for upload",
+  extracting: "Extracting key frames...",
+  pose: "Detecting skeleton keypoints...",
+  analyzing: "AI is analyzing your form...",
+  done: "Analysis complete!",
+  error: "Analysis failed",
 };
 
 export default function VideoUploader({ onAnalysisComplete }: Props) {
@@ -33,7 +33,7 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
       setFile(droppedFile);
       setError("");
     } else {
-      setError("请上传视频文件");
+      setError("Please upload a video file");
     }
   }, []);
 
@@ -52,12 +52,11 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
       setStage("extracting");
       setProgress(0);
 
-      // Dynamic imports for browser-only modules
       const { extractFrames } = await import("@/lib/frame-extractor");
       const frames = await extractFrames(file, 8, (p) => setProgress(p * 33));
 
       if (frames.length === 0) {
-        throw new Error("无法从视频中提取帧");
+        throw new Error("Could not extract frames from video");
       }
 
       setStage("pose");
@@ -82,7 +81,7 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || "分析失败");
+        throw new Error(err.error || "Analysis failed");
       }
 
       const { analysis } = await response.json();
@@ -91,7 +90,7 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
       onAnalysisComplete(analysis.id);
     } catch (err) {
       setStage("error");
-      setError(err instanceof Error ? err.message : "分析过程中出错");
+      setError(err instanceof Error ? err.message : "Error during analysis");
     }
   };
 
@@ -127,10 +126,10 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
           <div className="flex flex-col items-center gap-2">
             <Upload className="w-10 h-10 text-[var(--muted-foreground)]" />
             <p className="text-[var(--muted-foreground)]">
-              拖拽视频文件到此处，或点击选择
+              Drag & drop a video here, or click to select
             </p>
             <p className="text-xs text-[var(--muted-foreground)]">
-              支持 MP4, MOV, AVI 等格式
+              Supports MP4, MOV, AVI and more
             </p>
           </div>
         )}
@@ -138,13 +137,13 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
 
       {/* Stroke type selector */}
       <div>
-        <label className="block text-sm font-medium mb-2">选择泳姿</label>
+        <label className="block text-sm font-medium mb-2">Select Stroke</label>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
-            { value: "freestyle", label: "自由泳" },
-            { value: "breaststroke", label: "蛙泳" },
-            { value: "butterfly", label: "蝶泳" },
-            { value: "backstroke", label: "仰泳" },
+            { value: "freestyle", label: "Freestyle" },
+            { value: "breaststroke", label: "Breaststroke" },
+            { value: "butterfly", label: "Butterfly" },
+            { value: "backstroke", label: "Backstroke" },
           ].map((s) => (
             <button
               key={s.value}
@@ -190,7 +189,7 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
         disabled={!file || (stage !== "idle" && stage !== "error")}
         className="w-full py-3 rounded-lg bg-[var(--primary)] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
       >
-        {stage === "idle" || stage === "error" ? "开始分析" : "分析中..."}
+        {stage === "idle" || stage === "error" ? "Start Analysis" : "Analyzing..."}
       </button>
     </div>
   );

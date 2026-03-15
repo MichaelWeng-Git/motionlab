@@ -19,7 +19,7 @@ export default function ProgressChart({ analyses }: Props) {
   const data = [...analyses]
     .reverse()
     .map((a) => ({
-      date: new Date(a.created_at).toLocaleDateString("zh-CN", {
+      date: new Date(a.created_at).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       }),
@@ -29,7 +29,7 @@ export default function ProgressChart({ analyses }: Props) {
   if (data.length === 0) {
     return (
       <div className="h-64 flex items-center justify-center text-[var(--muted-foreground)]">
-        暂无分析记录
+        No analyses yet
       </div>
     );
   }
@@ -55,7 +55,7 @@ export default function ProgressChart({ analyses }: Props) {
             stroke="var(--primary)"
             strokeWidth={2}
             dot={{ fill: "var(--primary)", r: 4 }}
-            name="总评分"
+            name="Score"
           />
         </LineChart>
       </ResponsiveContainer>

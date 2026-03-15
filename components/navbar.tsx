@@ -19,10 +19,10 @@ export default function Navbar() {
                 Dashboard
               </Link>
               <Link href="/analyze" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
-                分析
+                Analyze
               </Link>
               <Link href="/progress" className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
-                进步曲线
+                Progress
               </Link>
             </div>
           )}
@@ -33,7 +33,7 @@ export default function Navbar() {
           ) : (
             <SignInButton mode="modal">
               <button className="px-4 py-1.5 text-sm bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity">
-                登录
+                Sign In
               </button>
             </SignInButton>
           )}

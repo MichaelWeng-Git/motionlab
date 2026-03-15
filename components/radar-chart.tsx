@@ -39,7 +39,7 @@ export default function RadarChart({ current, previous }: Props) {
             fontSize={10}
           />
           <Radar
-            name="当前"
+            name="Current"
             dataKey="current"
             stroke="var(--primary)"
             fill="var(--primary)"
@@ -47,7 +47,7 @@ export default function RadarChart({ current, previous }: Props) {
           />
           {previous && (
             <Radar
-              name="上次"
+              name="Previous"
               dataKey="previous"
               stroke="var(--muted-foreground)"
               fill="var(--muted-foreground)"
