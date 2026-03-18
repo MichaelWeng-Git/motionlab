@@ -1,30 +1,52 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { Upload, Film, Loader2 } from "lucide-react";
+import { Upload, Film, Loader2, CheckCircle } from "lucide-react";
+import PersonSelector from "./person-selector";
 
 type Props = {
   onAnalysisComplete: (analysisId: string) => void;
 };
 
-type Stage = "idle" | "extracting" | "pose" | "analyzing" | "done" | "error";
+type Step =
+  | "upload"
+  | "extracting"
+  | "detecting"
+  | "select-person"
+  | "lane-select"
+  | "segmenting"
+  | "skeleton"
+  | "analyzing"
+  | "done"
+  | "error";
 
-const STAGE_LABELS: Record<Stage, string> = {
-  idle: "Waiting for upload",
+const STEP_LABELS: Record<Step, string> = {
+  upload: "Upload a video",
   extracting: "Extracting key frames...",
-  pose: "Detecting skeleton keypoints...",
-  analyzing: "AI is analyzing your form...",
+  detecting: "Detecting sport type...",
+  "select-person": "Select yourself in the video",
+  "lane-select": "Select your lane",
+  segmenting: "SAM 2 is isolating you from the video...",
+  skeleton: "Detecting skeleton on segmented image...",
+  analyzing: "AI coach is analyzing your technique...",
   done: "Analysis complete!",
-  error: "Analysis failed",
+  error: "Something went wrong",
 };
 
 export default function VideoUploader({ onAnalysisComplete }: Props) {
   const [file, setFile] = useState<File | null>(null);
-  const [strokeType, setStrokeType] = useState("freestyle");
-  const [stage, setStage] = useState<Stage>("idle");
+  const [step, setStep] = useState<Step>("upload");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [detectedSport, setDetectedSport] = useState("");
+  const [hasMultipleAthletes, setHasMultipleAthletes] = useState(false);
+  const [sportDetails, setSportDetails] = useState("");
+  const [frames, setFrames] = useState<string[]>([]);
+  const [masks, setMasks] = useState<string[]>([]);
+  const [segmentedFrames, setSegmentedFrames] = useState<string[]>([]);
+  const [lane, setLane] = useState<number>(0);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -45,39 +67,164 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
     }
   }, []);
 
-  const handleAnalyze = async () => {
-    if (!file) return;
-
+  const uploadVideoFile = async (): Promise<string | null> => {
+    if (!file) return null;
     try {
-      setStage("extracting");
+      const formData = new FormData();
+      formData.append("video", file);
+      const res = await fetch("/api/upload-video", { method: "POST", body: formData });
+      if (res.ok) {
+        const { videoUrl } = await res.json();
+        return videoUrl;
+      }
+    } catch { /* optional */ }
+    return null;
+  };
+
+  // Step 1: Extract frames + detect sport
+  const handleUpload = async () => {
+    if (!file) return;
+    try {
+      setStep("extracting");
       setProgress(0);
 
       const { extractFrames } = await import("@/lib/frame-extractor");
-      const frames = await extractFrames(file, 8, (p) => setProgress(p * 33));
+      const extractedFrames = await extractFrames(file, 12, (p) => setProgress(p * 35));
+      setFrames(extractedFrames);
 
-      if (frames.length === 0) {
-        throw new Error("Could not extract frames from video");
-      }
+      if (extractedFrames.length === 0) throw new Error("Could not extract frames from video");
 
-      setStage("pose");
-      const { estimatePoses } = await import("@/lib/pose-estimation");
-      const poses = await estimatePoses(frames, (current, total) => {
-        setProgress(33 + (current / total) * 33);
+      setStep("detecting");
+      setProgress(38);
+
+      const response = await fetch("/api/detect-sport", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frames: extractedFrames }),
       });
 
-      setStage("analyzing");
-      setProgress(70);
+      if (!response.ok) throw new Error("Sport detection failed");
+
+      const detection = await response.json();
+      setDetectedSport(detection.sport);
+      setHasMultipleAthletes(detection.has_multiple_athletes);
+      setSportDetails(detection.details);
+      setProgress(42);
+
+      // Multiple athletes → show person selector for SAM 2
+      if (detection.has_multiple_athletes) {
+        setStep("select-person");
+        return;
+      }
+
+      // Single person → skip SAM 2, go to analysis
+      await runAnalysis(extractedFrames, [], [], undefined);
+    } catch (err) {
+      setStep("error");
+      setError(err instanceof Error ? err.message : "Error during upload");
+    }
+  };
+
+  // Step 2: Person selected → SAM 2 segment → skeleton → analysis
+  const handlePersonSelected = async (clickPoint: { x: number; y: number }) => {
+    try {
+      // SAM 2 segmentation
+      setStep("segmenting");
+      setProgress(45);
+
+      const segResponse = await fetch("/api/segment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frames, clickPoint }),
+      });
+
+      let segMasks: string[] = [];
+      let segImages: string[] = [];
+
+      if (segResponse.ok) {
+        const segResult = await segResponse.json();
+        segMasks = segResult.masks || [];
+        segImages = segResult.segmentedFrames || [];
+        setMasks(segMasks);
+        setSegmentedFrames(segImages);
+      }
+
+      setProgress(60);
+
+      // Skeleton detection on segmented images (clean bg = better accuracy)
+      let poses: Array<Array<{ x: number; y: number; z: number; visibility: number }>> = [];
+      if (segImages.length > 0) {
+        setStep("skeleton");
+        setProgress(62);
+        try {
+          const { estimatePoses } = await import("@/lib/pose-estimation");
+          poses = await estimatePoses(segImages, (current, total) => {
+            setProgress(62 + (current / total) * 10);
+          });
+        } catch (e) {
+          console.warn("Pose detection failed, continuing:", e);
+        }
+      }
+
+      setProgress(73);
+
+      // Ask lane if swimming
+      if (detectedSport === "swimming" && hasMultipleAthletes) {
+        // Store poses temporarily, will use in runAnalysis
+        (window as any).__motionlab_poses = poses;
+        setStep("lane-select");
+        return;
+      }
+
+      await runAnalysis(frames, segMasks, poses, undefined);
+    } catch (err) {
+      setStep("error");
+      setError(err instanceof Error ? err.message : "Error during segmentation");
+    }
+  };
+
+  const handleSkipSelection = async () => {
+    if (detectedSport === "swimming" && hasMultipleAthletes) {
+      setStep("lane-select");
+      return;
+    }
+    await runAnalysis(frames, [], [], undefined);
+  };
+
+  // Step 3: Full analysis
+  const runAnalysis = async (
+    framesToUse: string[],
+    maskData: string[],
+    poseData: Array<Array<{ x: number; y: number; z: number; visibility: number }>>,
+    selectedLane?: number,
+  ) => {
+    try {
+      setStep("analyzing");
+      setProgress(75);
+
+      const videoUploadPromise = uploadVideoFile();
+
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => Math.min(prev + 2, 92));
+      }, 1000);
+
+      const videoUrl = await videoUploadPromise;
 
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          strokeType,
-          frames,
-          poses,
-          thumbnailBase64: frames[0] || null,
+          frames: framesToUse,
+          masks: maskData.length > 0 ? maskData : undefined,
+          segmentedFrames: segmentedFrames.length > 0 ? segmentedFrames : undefined,
+          poses: poseData.length > 0 ? poseData : undefined,
+          lane: selectedLane || undefined,
+          videoUrl: videoUrl || undefined,
+          thumbnailBase64: framesToUse[0] || null,
         }),
       });
+
+      clearInterval(progressInterval);
 
       if (!response.ok) {
         const err = await response.json();
@@ -86,12 +233,32 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
 
       const { analysis } = await response.json();
       setProgress(100);
-      setStage("done");
+      setStep("done");
       onAnalysisComplete(analysis.id);
     } catch (err) {
-      setStage("error");
+      setStep("error");
       setError(err instanceof Error ? err.message : "Error during analysis");
     }
+  };
+
+  const handleLaneConfirm = () => {
+    const poses = (window as any).__motionlab_poses || [];
+    delete (window as any).__motionlab_poses;
+    runAnalysis(frames, masks, poses, lane || undefined);
+  };
+
+  const handleReset = () => {
+    setFile(null);
+    setStep("upload");
+    setProgress(0);
+    setError("");
+    setFrames([]);
+    setMasks([]);
+    setSegmentedFrames([]);
+    setDetectedSport("");
+    setHasMultipleAthletes(false);
+    setSportDetails("");
+    setLane(0);
   };
 
   return (
@@ -100,8 +267,10 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
       <div
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
-        onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors ${
+        onClick={() => step === "upload" && fileInputRef.current?.click()}
+        className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+          step === "upload" ? "cursor-pointer" : "cursor-default"
+        } ${
           file
             ? "border-[var(--accent)] bg-[var(--accent)]/5"
             : "border-[var(--border)] hover:border-[var(--muted-foreground)]"
@@ -135,37 +304,69 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
         )}
       </div>
 
-      {/* Stroke type selector */}
-      <div>
-        <label className="block text-sm font-medium mb-2">Select Stroke</label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {[
-            { value: "freestyle", label: "Freestyle" },
-            { value: "breaststroke", label: "Breaststroke" },
-            { value: "butterfly", label: "Butterfly" },
-            { value: "backstroke", label: "Backstroke" },
-          ].map((s) => (
-            <button
-              key={s.value}
-              onClick={() => setStrokeType(s.value)}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                strokeType === s.value
-                  ? "bg-[var(--primary)] text-white"
-                  : "bg-[var(--card)] border border-[var(--border)] hover:border-[var(--muted-foreground)]"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
+      {/* Sport detection result */}
+      {detectedSport && step !== "upload" && (
+        <div className="p-3 rounded-lg bg-[var(--accent)]/10 border border-[var(--accent)]/30 text-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-[var(--accent)]" />
+            <span>Detected: <strong className="capitalize">{detectedSport}</strong></span>
+          </div>
+          {sportDetails && (
+            <p className="text-xs text-[var(--muted-foreground)] mt-1 ml-6">{sportDetails}</p>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* Progress */}
-      {stage !== "idle" && stage !== "error" && (
+      {/* Person selector */}
+      {step === "select-person" && frames[0] && (
+        <PersonSelector
+          frameBase64={frames[0]}
+          onSelect={handlePersonSelected}
+          onSkip={handleSkipSelection}
+        />
+      )}
+
+      {/* Lane selector */}
+      {step === "lane-select" && (
+        <div className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)] space-y-3">
+          <div>
+            <h3 className="font-medium">Which lane are you in?</h3>
+            <p className="text-xs text-[var(--muted-foreground)] mt-1">
+              This helps AI focus its analysis on the correct swimmer.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+              <button
+                key={n}
+                onClick={() => setLane(n)}
+                className={`w-11 h-11 rounded-lg text-sm font-medium transition-colors ${
+                  lane === n
+                    ? "bg-[var(--primary)] text-white"
+                    : "bg-[var(--muted)] border border-[var(--border)] hover:border-[var(--muted-foreground)]"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleLaneConfirm}
+            disabled={lane === 0}
+            className="w-full py-2.5 rounded-lg bg-[var(--primary)] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+          >
+            {lane > 0 ? `Analyze Lane ${lane}` : "Select a lane"}
+          </button>
+        </div>
+      )}
+
+      {/* Progress bar */}
+      {!["upload", "select-person", "lane-select", "error"].includes(step) && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm">
-            {stage !== "done" && <Loader2 className="w-4 h-4 animate-spin" />}
-            <span>{STAGE_LABELS[stage]}</span>
+            {step !== "done" && <Loader2 className="w-4 h-4 animate-spin" />}
+            {step === "done" && <CheckCircle className="w-4 h-4 text-green-400" />}
+            <span>{STEP_LABELS[step]}</span>
           </div>
           <div className="h-2 bg-[var(--muted)] rounded-full overflow-hidden">
             <div
@@ -183,14 +384,24 @@ export default function VideoUploader({ onAnalysisComplete }: Props) {
         </div>
       )}
 
-      {/* Analyze button */}
-      <button
-        onClick={handleAnalyze}
-        disabled={!file || (stage !== "idle" && stage !== "error")}
-        className="w-full py-3 rounded-lg bg-[var(--primary)] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
-      >
-        {stage === "idle" || stage === "error" ? "Start Analysis" : "Analyzing..."}
-      </button>
+      {/* Action button */}
+      {step === "upload" && (
+        <button
+          onClick={handleUpload}
+          disabled={!file}
+          className="w-full py-3 rounded-lg bg-[var(--primary)] text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+        >
+          Start Analysis
+        </button>
+      )}
+      {step === "error" && (
+        <button
+          onClick={handleReset}
+          className="w-full py-3 rounded-lg bg-[var(--muted)] text-[var(--foreground)] font-medium hover:opacity-90 transition-opacity"
+        >
+          Try Again
+        </button>
+      )}
     </div>
   );
 }

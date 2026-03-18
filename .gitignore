@@ -35,3 +35,8 @@ next-env.d.ts
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# SAM 2 server
+sam2-server/venv/
+sam2-server/checkpoints/
+sam2-server/__pycache__/

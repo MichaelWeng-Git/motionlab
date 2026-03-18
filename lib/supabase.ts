@@ -22,11 +22,32 @@ export type Analysis = {
     part: string;
     description: string;
     suggestion: string;
+    frame_index?: number;
   }>;
   keyframe_poses: Array<Array<{ x: number; y: number; z: number; visibility: number }>>;
+  keyframe_images: string[] | null;
+  segmentation_masks: string[] | null;
+  video_url: string | null;
   thumbnail_base64: string | null;
   created_at: string;
 };
+
+export async function uploadVideo(file: File, userId: string): Promise<string> {
+  const ext = file.name.split(".").pop() || "mp4";
+  const path = `${userId}/${Date.now()}.${ext}`;
+
+  const { error } = await getSupabase().storage
+    .from("videos")
+    .upload(path, file, { contentType: file.type });
+
+  if (error) throw error;
+
+  const { data } = getSupabase().storage
+    .from("videos")
+    .getPublicUrl(path);
+
+  return data.publicUrl;
+}
 
 export async function saveAnalysis(data: Omit<Analysis, "id" | "created_at">) {
   const { data: result, error } = await getSupabase()

@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import SkeletonViewer from "@/components/skeleton-viewer";
 import ScoreCard from "@/components/score-card";
 import RadarChart from "@/components/radar-chart";
+import ProComparison from "@/components/pro-comparison";
 import { getAnalysis, type Analysis } from "@/lib/supabase";
 import { STROKE_LABELS } from "@/lib/utils";
 
@@ -68,14 +69,35 @@ export default function AnalysisPage() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left: 3D Skeleton Viewer */}
-        <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden h-[500px]">
-          <SkeletonViewer
-            poses={analysis.keyframe_poses}
-            issues={analysis.issues}
-            strokeType={analysis.stroke_type}
-            highlightPart={highlightPart}
-          />
+        {/* Left column */}
+        <div className="space-y-6">
+          {/* Frame viewer */}
+          <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden h-[420px]">
+            <SkeletonViewer
+              frames={analysis.keyframe_images || []}
+              masks={analysis.segmentation_masks || []}
+              issues={analysis.issues}
+              highlightPart={highlightPart}
+            />
+          </div>
+
+          {/* Original video */}
+          {analysis.video_url && (
+            <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+              <div className="p-3 border-b border-[var(--border)]">
+                <h3 className="text-sm font-medium">Your Video</h3>
+              </div>
+              <video
+                src={analysis.video_url}
+                controls
+                className="w-full"
+                style={{ maxHeight: "300px" }}
+              />
+            </div>
+          )}
+
+          {/* Pro swimmer comparison */}
+          <ProComparison strokeType={analysis.stroke_type} />
         </div>
 
         {/* Right: Analysis Report */}
@@ -118,6 +140,11 @@ export default function AnalysisPage() {
                     <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400">
                       {issue.part}
                     </span>
+                    {issue.frame_index !== undefined && (
+                      <span className="text-xs text-[var(--muted-foreground)]">
+                        Frame {issue.frame_index + 1}
+                      </span>
+                    )}
                   </div>
                   <p className="text-sm font-medium">{issue.description}</p>
                   <p className="text-xs text-[var(--muted-foreground)] mt-1">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, ChevronRight } from "lucide-react";
 import { getUserAnalyses, type Analysis } from "@/lib/supabase";
 import { STROKE_LABELS } from "@/lib/utils";
 
@@ -21,18 +21,23 @@ export default function DashboardPage() {
   }, [user?.id]);
 
   const recentAnalyses = analyses.slice(0, 5);
-  const strokeStats = ["freestyle", "breaststroke", "butterfly", "backstroke"].map(
-    (type) => {
-      const typeAnalyses = analyses.filter((a) => a.stroke_type === type);
-      const latest = typeAnalyses[0];
-      return {
-        type,
-        label: STROKE_LABELS[type],
-        count: typeAnalyses.length,
-        latestScore: latest?.overall_score ?? null,
-      };
-    }
-  );
+
+  // Swimming stats
+  const swimmingAnalyses = analyses;
+  const swimmingAvg = swimmingAnalyses.length > 0
+    ? Math.round(swimmingAnalyses.reduce((sum, a) => sum + a.overall_score, 0) / swimmingAnalyses.length)
+    : null;
+
+  const strokeStats = ["freestyle", "breaststroke", "butterfly", "backstroke"].map((type) => {
+    const typeAnalyses = analyses.filter((a) => a.stroke_type === type);
+    const latest = typeAnalyses[0];
+    return {
+      type,
+      label: STROKE_LABELS[type],
+      count: typeAnalyses.length,
+      latestScore: latest?.overall_score ?? null,
+    };
+  });
 
   if (loading) {
     return (
@@ -55,22 +60,55 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {/* Stroke stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        {strokeStats.map((s) => (
-          <div
-            key={s.type}
-            className="p-4 rounded-xl bg-[var(--card)] border border-[var(--border)]"
-          >
-            <div className="text-sm text-[var(--muted-foreground)]">{s.label}</div>
-            <div className="text-2xl font-bold mt-1">
-              {s.latestScore !== null ? s.latestScore : "—"}
-            </div>
-            <div className="text-xs text-[var(--muted-foreground)] mt-1">
-              {s.count} {s.count === 1 ? "analysis" : "analyses"}
+      {/* Sports section */}
+      <div className="mb-8">
+        <h2 className="text-sm font-medium text-[var(--muted-foreground)] uppercase tracking-wider mb-3">Sports</h2>
+
+        {/* Swimming card */}
+        <div className="rounded-xl bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+          <div className="p-4 flex items-center justify-between border-b border-[var(--border)]">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--primary)]/10 flex items-center justify-center text-xl">
+                🏊
+              </div>
+              <div>
+                <h3 className="font-semibold">Swimming</h3>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {swimmingAnalyses.length} {swimmingAnalyses.length === 1 ? "analysis" : "analyses"} total
+                  {swimmingAvg !== null && <span> · Avg score: {swimmingAvg}</span>}
+                </p>
+              </div>
             </div>
           </div>
-        ))}
+
+          {/* Stroke breakdown */}
+          <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-[var(--border)]">
+            {strokeStats.map((s) => (
+              <div key={s.type} className="p-4 text-center">
+                <div className="text-xs text-[var(--muted-foreground)] mb-1">{s.label}</div>
+                <div className={`text-2xl font-bold ${
+                  s.latestScore === null
+                    ? "text-[var(--muted-foreground)]"
+                    : s.latestScore >= 80
+                      ? "text-green-400"
+                      : s.latestScore >= 60
+                        ? "text-yellow-400"
+                        : "text-red-400"
+                }`}>
+                  {s.latestScore !== null ? s.latestScore : "—"}
+                </div>
+                <div className="text-xs text-[var(--muted-foreground)] mt-1">
+                  {s.count} {s.count === 1 ? "session" : "sessions"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Placeholder for future sports */}
+        <div className="mt-3 p-4 rounded-xl border border-dashed border-[var(--border)] text-center text-sm text-[var(--muted-foreground)]">
+          More sports coming soon
+        </div>
       </div>
 
       {/* Recent analyses */}
@@ -110,23 +148,26 @@ export default function DashboardPage() {
                   )}
                   <div>
                     <div className="font-medium text-sm">
-                      {STROKE_LABELS[a.stroke_type]}
+                      Swimming · {STROKE_LABELS[a.stroke_type]}
                     </div>
                     <div className="text-xs text-[var(--muted-foreground)]">
                       {new Date(a.created_at).toLocaleString()}
                     </div>
                   </div>
                 </div>
-                <div
-                  className={`text-lg font-bold ${
-                    a.overall_score >= 80
-                      ? "text-green-400"
-                      : a.overall_score >= 60
-                        ? "text-yellow-400"
-                        : "text-red-400"
-                  }`}
-                >
-                  {a.overall_score}
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-lg font-bold ${
+                      a.overall_score >= 80
+                        ? "text-green-400"
+                        : a.overall_score >= 60
+                          ? "text-yellow-400"
+                          : "text-red-400"
+                    }`}
+                  >
+                    {a.overall_score}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-[var(--muted-foreground)]" />
                 </div>
               </Link>
             ))}

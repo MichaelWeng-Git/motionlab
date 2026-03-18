@@ -21,7 +21,7 @@ export default function AnalyzePage() {
 
       <div className="mt-6 p-4 rounded-lg bg-[var(--muted)] text-sm text-[var(--muted-foreground)] space-y-1">
         <p className="font-medium text-[var(--foreground)]">Tips:</p>
-        <p>· Upload a 5-30 second clip covering a full stroke cycle</p>
+        <p>· Videos up to 5 minutes are supported — full race footage works great</p>
         <p>· Side view or underwater angles work best</p>
         <p>· Higher video clarity means more accurate analysis</p>
       </div>

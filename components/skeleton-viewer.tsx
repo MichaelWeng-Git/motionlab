@@ -1,207 +1,303 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
-import { POSE_CONNECTIONS, PART_TO_LANDMARKS, IDEAL_POSES } from "@/lib/skeleton-data";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { POSE_CONNECTIONS } from "@/lib/skeleton-data";
 
 type PoseLandmark = { x: number; y: number; z: number; visibility?: number };
 
+type ViewMode = "original" | "segmented" | "skeleton";
+
 type Props = {
-  poses: PoseLandmark[][];
-  issues?: Array<{ part: string; description: string; suggestion: string }>;
-  strokeType?: string;
+  frames?: string[];
+  masks?: string[];
+  poses?: PoseLandmark[][];
+  segmentedFrames?: string[];
+  issues?: Array<{ part: string; description: string; suggestion: string; frame_index?: number }>;
   highlightPart?: string | null;
 };
 
-function landmarkToVec3(lm: PoseLandmark): [number, number, number] {
-  return [(lm.x - 0.5) * 4, -(lm.y - 0.5) * 4, (lm.z || 0) * 2];
+function drawSkeletonOnCtx(
+  ctx: CanvasRenderingContext2D,
+  landmarks: PoseLandmark[],
+  dx: number, dy: number, dw: number, dh: number
+) {
+  // Connections
+  ctx.lineWidth = 3;
+  for (const [a, b] of POSE_CONNECTIONS) {
+    if (a >= landmarks.length || b >= landmarks.length) continue;
+    const la = landmarks[a];
+    const lb = landmarks[b];
+    if ((la.visibility ?? 1) < 0.4 || (lb.visibility ?? 1) < 0.4) continue;
+
+    const ax = dx + la.x * dw, ay = dy + la.y * dh;
+    const bx = dx + lb.x * dw, by = dy + lb.y * dh;
+
+    // Shadow
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+
+    // Green line
+    ctx.strokeStyle = "#00ff88";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
+
+  // Joints
+  for (let i = 0; i < landmarks.length; i++) {
+    const lm = landmarks[i];
+    if ((lm.visibility ?? 1) < 0.4) continue;
+    const x = dx + lm.x * dw;
+    const y = dy + lm.y * dh;
+
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#00ff88";
+    ctx.fill();
+  }
 }
 
-function getPartColor(
-  landmarkIdx: number,
-  issueParts: Set<string>,
-  highlightPart: string | null
-): string {
-  const part = Object.entries(PART_TO_LANDMARKS).find(([, indices]) =>
-    indices.includes(landmarkIdx)
-  )?.[0];
-
-  if (highlightPart && part === highlightPart) return "#f59e0b";
-  if (part && issueParts.has(part)) return "#ef4444";
-  return "#22c55e";
-}
-
-function SkeletonBody({
-  landmarks,
-  issueParts,
-  highlightPart,
-  color,
-  opacity = 1,
-}: {
-  landmarks: PoseLandmark[];
-  issueParts: Set<string>;
-  highlightPart: string | null;
-  color?: string;
-  opacity?: number;
-}) {
-  const positions = useMemo(
-    () => landmarks.map(landmarkToVec3),
-    [landmarks]
-  );
-
-  return (
-    <group>
-      {positions.map((pos, i) => {
-        const visibility = landmarks[i]?.visibility ?? 1;
-        if (visibility < 0.3) return null;
-        const jointColor = color || getPartColor(i, issueParts, highlightPart);
-        return (
-          <mesh key={i} position={pos}>
-            <sphereGeometry args={[0.06, 8, 8]} />
-            <meshStandardMaterial
-              color={jointColor}
-              transparent={opacity < 1}
-              opacity={opacity}
-            />
-          </mesh>
-        );
-      })}
-
-      {POSE_CONNECTIONS.map(([a, b], i) => {
-        const va = landmarks[a]?.visibility ?? 1;
-        const vb = landmarks[b]?.visibility ?? 1;
-        if (va < 0.3 || vb < 0.3) return null;
-
-        const lineColor = color || getPartColor(a, issueParts, highlightPart);
-        return (
-          <Line
-            key={i}
-            points={[positions[a], positions[b]]}
-            color={lineColor}
-            lineWidth={2}
-            transparent={opacity < 1}
-            opacity={opacity}
-          />
-        );
-      })}
-    </group>
-  );
-}
-
-function Scene({
-  landmarks,
-  issueParts,
-  highlightPart,
-  showIdeal,
-  strokeType,
-}: {
-  landmarks: PoseLandmark[];
-  issueParts: Set<string>;
-  highlightPart: string | null;
-  showIdeal: boolean;
-  strokeType: string;
-}) {
-  return (
-    <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <OrbitControls enableDamping dampingFactor={0.1} />
-
-      <SkeletonBody
-        landmarks={landmarks}
-        issueParts={issueParts}
-        highlightPart={highlightPart}
-      />
-
-      {showIdeal && IDEAL_POSES[strokeType] && (
-        <SkeletonBody
-          landmarks={IDEAL_POSES[strokeType].map((p) => ({ ...p, visibility: 1 }))}
-          issueParts={new Set()}
-          highlightPart={null}
-          color="#3b82f6"
-          opacity={0.3}
-        />
-      )}
-
-      <gridHelper args={[8, 20, "#333", "#222"]} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -1]} />
-    </>
-  );
-}
-
-export default function SkeletonViewer({ poses, issues = [], strokeType = "freestyle", highlightPart = null }: Props) {
+export default function SkeletonViewer({
+  frames = [], masks = [], poses = [], segmentedFrames = [],
+  issues = [], highlightPart = null,
+}: Props) {
   const [frameIndex, setFrameIndex] = useState(0);
-  const [showIdeal, setShowIdeal] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("original");
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const totalFrames = frames.length;
 
-  const issueParts = useMemo(
-    () => new Set(issues.map((i) => i.part)),
-    [issues]
-  );
+  const hasMasks = masks.some(m => m?.length > 0);
+  const hasSegmented = segmentedFrames.some(s => s?.length > 0);
+  const hasPoses = poses.some(p => p?.some(lm => (lm?.visibility ?? 0) > 0.3));
 
-  const currentLandmarks = poses[frameIndex] || poses[0] || [];
+  // Auto-detect best view
+  useEffect(() => {
+    if (hasSegmented || hasMasks) setViewMode("segmented");
+  }, [hasSegmented, hasMasks]);
 
-  if (!poses.length || !currentLandmarks.length) {
+  const highlightedIssue = issues.find((i) => i.part === highlightPart);
+  useEffect(() => {
+    if (highlightedIssue?.frame_index !== undefined) {
+      setFrameIndex(highlightedIssue.frame_index);
+      setIsPlaying(false);
+    }
+  }, [highlightPart, highlightedIssue]);
+
+  // Run pose detection on segmented frames in background
+  const [detectedPoses, setDetectedPoses] = useState<PoseLandmark[][]>([]);
+  useEffect(() => {
+    if (poses.length > 0 || !hasSegmented) return;
+    let cancelled = false;
+    async function detect() {
+      try {
+        const { estimatePoses } = await import("@/lib/pose-estimation");
+        const src = segmentedFrames.filter(s => s?.length > 0);
+        if (src.length === 0) return;
+        const results = await estimatePoses(src);
+        if (!cancelled) setDetectedPoses(results);
+      } catch (e) {
+        console.warn("Pose detection failed:", e);
+      }
+    }
+    detect();
+    return () => { cancelled = true; };
+  }, [segmentedFrames, poses, hasSegmented]);
+
+  const allPoses = poses.length > 0 ? poses : detectedPoses;
+
+  const drawFrame = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container || !frames[frameIndex]) return;
+
+    const ctxOrNull = canvas.getContext("2d");
+    if (!ctxOrNull) return;
+    const ctx: CanvasRenderingContext2D = ctxOrNull;
+
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    canvas.width = cw;
+    canvas.height = ch;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cw, ch);
+
+    // Choose which image to show as base
+    let imgSrc: string;
+    if (viewMode === "segmented" && segmentedFrames[frameIndex]?.length > 0) {
+      imgSrc = `data:image/jpeg;base64,${segmentedFrames[frameIndex]}`;
+    } else {
+      imgSrc = `data:image/jpeg;base64,${frames[frameIndex]}`;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(cw / img.width, ch / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      const dx = (cw - dw) / 2;
+      const dy = (ch - dh) / 2;
+
+      ctx.drawImage(img, dx, dy, dw, dh);
+
+      // Mask overlay on original view
+      if (viewMode === "original" && masks[frameIndex]?.length > 0) {
+        const maskImg = new Image();
+        maskImg.onload = () => {
+          ctx.globalAlpha = 0.3;
+          ctx.drawImage(maskImg, dx, dy, dw, dh);
+          ctx.globalAlpha = 1.0;
+          maybeDrawSkeleton();
+          drawAnnotations();
+        };
+        maskImg.src = `data:image/png;base64,${masks[frameIndex]}`;
+        return;
+      }
+
+      maybeDrawSkeleton();
+      drawAnnotations();
+
+      function maybeDrawSkeleton() {
+        if (viewMode === "skeleton" || viewMode === "segmented") {
+          const currentPose = allPoses[frameIndex];
+          if (currentPose?.some(lm => (lm?.visibility ?? 0) > 0.3)) {
+            drawSkeletonOnCtx(ctx, currentPose, dx, dy, dw, dh);
+          }
+        }
+      }
+
+      function drawAnnotations() {
+        const frameIssues = issues.filter(i => i.frame_index === frameIndex);
+        if (frameIssues.length > 0) {
+          let annotY = ch - 10;
+          for (const issue of [...frameIssues].reverse()) {
+            const text = `${issue.part}: ${issue.description}`;
+            ctx.font = "12px system-ui";
+            const tw = Math.min(ctx.measureText(text).width + 16, cw - 16);
+            ctx.fillStyle = "rgba(0,0,0,0.75)";
+            ctx.beginPath();
+            ctx.roundRect(8, annotY - 22, tw, 24, 4);
+            ctx.fill();
+            ctx.fillStyle = "#f59e0b";
+            ctx.fillText(text, 16, annotY - 6, cw - 32);
+            annotY -= 28;
+          }
+        }
+
+        if (highlightPart && highlightedIssue) {
+          ctx.fillStyle = "rgba(245,158,11,0.9)";
+          ctx.beginPath();
+          ctx.roundRect(8, 8, 160, 24, 4);
+          ctx.fill();
+          ctx.fillStyle = "#000";
+          ctx.font = "bold 11px system-ui";
+          ctx.fillText(`Showing: ${highlightPart}`, 14, 24);
+        }
+
+        // View mode label
+        const label = viewMode === "original" ? "Original" : viewMode === "segmented" ? "Segmented + Skeleton" : "Skeleton";
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.beginPath();
+        ctx.roundRect(cw - 130, 8, 122, 22, 4);
+        ctx.fill();
+        ctx.fillStyle = "#aaa";
+        ctx.font = "11px system-ui";
+        ctx.fillText(label, cw - 122, 23);
+      }
+    };
+    img.src = imgSrc;
+  }, [frameIndex, frames, masks, segmentedFrames, allPoses, viewMode, issues, highlightPart, highlightedIssue]);
+
+  useEffect(() => { drawFrame(); }, [drawFrame]);
+  useEffect(() => {
+    const observer = new ResizeObserver(() => drawFrame());
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [drawFrame]);
+
+  // Auto-play
+  useEffect(() => {
+    if (isPlaying && totalFrames > 1) {
+      intervalRef.current = setInterval(() => {
+        setFrameIndex((prev) => (prev + 1) % totalFrames);
+      }, 600);
+    }
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [isPlaying, totalFrames]);
+
+  if (!totalFrames) {
     return (
       <div className="h-full flex items-center justify-center text-[var(--muted-foreground)]">
-        No skeleton data
+        No frames available
       </div>
     );
   }
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 min-h-0">
-        <Canvas camera={{ position: [0, 0, 5], fov: 50 }}>
-          <Scene
-            landmarks={currentLandmarks}
-            issueParts={issueParts}
-            highlightPart={highlightPart}
-            showIdeal={showIdeal}
-            strokeType={strokeType}
-          />
-        </Canvas>
+      <div ref={containerRef} className="flex-1 min-h-0">
+        <canvas ref={canvasRef} className="w-full h-full" />
       </div>
 
       <div className="p-3 border-t border-[var(--border)] space-y-2">
-        {poses.length > 1 && (
+        {/* View mode tabs */}
+        <div className="flex gap-1">
+          {(["original", ...(hasSegmented || hasMasks ? ["segmented"] : []), ...(hasPoses ? ["skeleton"] : [])] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1 rounded text-xs transition-colors ${
+                viewMode === mode
+                  ? "bg-[var(--primary)] text-white"
+                  : "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--border)]"
+              }`}
+            >
+              {mode === "original" ? "Original" : mode === "segmented" ? "SAM 2 + Skeleton" : "Skeleton Only"}
+            </button>
+          ))}
+        </div>
+
+        {/* Playback controls */}
+        {totalFrames > 1 && (
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[var(--muted-foreground)] w-16">
-              Frame {frameIndex + 1}/{poses.length}
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="text-xs px-2.5 py-1 rounded bg-[var(--muted)] hover:bg-[var(--border)] transition-colors"
+            >
+              {isPlaying ? "⏸" : "▶"}
+            </button>
+            <span className="text-xs text-[var(--muted-foreground)] w-12">
+              {frameIndex + 1}/{totalFrames}
             </span>
             <input
               type="range"
               min={0}
-              max={poses.length - 1}
+              max={totalFrames - 1}
               value={frameIndex}
-              onChange={(e) => setFrameIndex(Number(e.target.value))}
+              onChange={(e) => {
+                setFrameIndex(Number(e.target.value));
+                setIsPlaying(false);
+              }}
               className="flex-1 accent-[var(--primary)]"
             />
           </div>
         )}
 
-        <label className="flex items-center gap-2 text-xs cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showIdeal}
-            onChange={(e) => setShowIdeal(e.target.checked)}
-            className="accent-[var(--primary)]"
-          />
-          <span className="text-[var(--muted-foreground)]">
-            Show ideal pose (blue, semi-transparent)
-          </span>
-        </label>
-
-        <div className="flex gap-3 text-xs text-[var(--muted-foreground)]">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-500" /> Good
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-500" /> Needs work
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-500" /> Selected
-          </span>
-        </div>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          Click an issue to jump to frame
+        </p>
       </div>
     </div>
   );
